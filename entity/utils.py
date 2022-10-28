@@ -1,6 +1,7 @@
 import numpy as np
 import json
 from loguru import logger
+import random
 
 
 def batchify(samples, batch_size):
@@ -42,7 +43,7 @@ def overlap(s1, s2):
 
 
 def convert_dataset_to_samples(dataset,
-                               max_span_length,
+                               args,
                                ner_label2id=None,
                                context_window=0,
                                split=0):
@@ -70,31 +71,33 @@ def convert_dataset_to_samples(dataset,
         if c < data_range[0] or c >= data_range[1]:
             continue
         for i, sent in enumerate(doc):
+            sent_length = len(sent.text)
             num_ner += len(sent.ner)
             sample = {
                 'doc_key': doc._doc_key,
                 'sentence_ix': sent.sentence_ix,
             }
-            if context_window != 0 and len(sent.text) > context_window:
-                logger.info('Long sentence: {} {}'.format(
-                    sample, len(sent.text)))
+            if context_window != 0 and sent_length > context_window:
+                logger.info(f'Long sentence: {sample} ({sent_length})')
                 # print('Exclude:', sample)
                 # continue
             sample['tokens'] = sent.text
-            sample['sent_length'] = len(sent.text)
+            sample['sent_length'] = sent_length
             sent_start = 0
-            sent_end = len(sample['tokens'])
+            sent_end = sent_length
 
-            max_len = max(max_len, len(sent.text))
+            max_len = max(max_len, sent_length)
             max_ner = max(max_ner, len(sent.ner))
 
-            if context_window > 0:
-                add_left = (context_window - len(sent.text)) // 2
-                add_right = (context_window - len(sent.text)) - add_left
+            if args.context_mode == 'both':
+                add_left = (context_window - sent_length) // 2
+                add_right = (context_window - sent_length) - add_left
 
                 # add left context
                 j = i - 1
                 while j >= 0 and add_left > 0:
+                    if args.truncate_sent and len(doc[j].text) > add_left:
+                        break
                     context_to_add = doc[j].text[-add_left:]
                     sample['tokens'] = context_to_add + sample['tokens']
                     add_left -= len(context_to_add)
@@ -105,10 +108,52 @@ def convert_dataset_to_samples(dataset,
                 # add right context
                 j = i + 1
                 while j < len(doc) and add_right > 0:
+                    if args.truncate_sent and len(doc[j].text) > add_right:
+                        break
                     context_to_add = doc[j].text[:add_right]
                     sample['tokens'] = sample['tokens'] + context_to_add
                     add_right -= len(context_to_add)
                     j += 1
+
+            elif args.context_mode == 'left':
+                add_left = context_window - sent_length
+
+                # add left context
+                j = i - 1
+                while j >= 0 and add_left > 0:
+                    if args.truncate_sent and len(doc[j].text) > add_left:
+                        break
+                    context_to_add = doc[j].text[-add_left:]
+                    sample['tokens'] = context_to_add + sample['tokens']
+                    add_left -= len(context_to_add)
+                    sent_start += len(context_to_add)
+                    sent_end += len(context_to_add)
+                    j -= 1
+
+            elif args.context_mode == 'right':
+                add_right = context_window - sent_length
+
+                # add right context
+                j = i + 1
+                while j < len(doc) and add_right > 0:
+                    if args.truncate_sent and len(doc[j].text) > add_right:
+                        break
+                    context_to_add = doc[j].text[:add_right]
+                    sample['tokens'] = sample['tokens'] + context_to_add
+                    add_right -= len(context_to_add)
+                    j += 1
+
+            elif args.context_mode == 'random':
+                add_right = context_window - sent_length
+
+                # add random context
+                while add_right > 0:
+                    j = random.randrange(0, len(doc))
+                    if args.truncate_sent and len(doc[j].text) > add_right:
+                        break
+                    context_to_add = doc[j].text[:add_right]
+                    sample['tokens'] = sample['tokens'] + context_to_add
+                    add_right -= len(context_to_add)
 
             sample['sent_start'] = sent_start
             sample['sent_end'] = sent_end
@@ -121,8 +166,8 @@ def convert_dataset_to_samples(dataset,
             span2id = {}
             sample['spans'] = []
             sample['spans_label'] = []
-            for i in range(len(sent.text)):
-                for j in range(i, min(len(sent.text), i + max_span_length)):
+            for i in range(sent_length):
+                for j in range(i, min(sent_length, i + args.max_span_length)):
                     sample['spans'].append(
                         (i + sent_start, j + sent_start, j - i + 1))
                     span2id[(i, j)] = len(sample['spans']) - 1
@@ -159,12 +204,12 @@ class NpEncoder(json.JSONEncoder):
 
 def get_train_fold(data, fold):
     print('Getting train fold %d...' % fold)
-    l = int(len(data) * 0.1 * fold)
-    r = int(len(data) * 0.1 * (fold + 1))
+    left = int(len(data) * 0.1 * fold)
+    right = int(len(data) * 0.1 * (fold + 1))
     new_js = []
     new_docs = []
     for i in range(len(data)):
-        if i < l or i >= r:
+        if i < left or i >= right:
             new_js.append(data.js[i])
             new_docs.append(data.documents[i])
     print('# documents: %d --> %d' % (len(data), len(new_docs)))
@@ -175,12 +220,12 @@ def get_train_fold(data, fold):
 
 def get_test_fold(data, fold):
     print('Getting test fold %d...' % fold)
-    l = int(len(data) * 0.1 * fold)
-    r = int(len(data) * 0.1 * (fold + 1))
+    left = int(len(data) * 0.1 * fold)
+    right = int(len(data) * 0.1 * (fold + 1))
     new_js = []
     new_docs = []
     for i in range(len(data)):
-        if i >= l and i < r:
+        if i >= left and i < right:
             new_js.append(data.js[i])
             new_docs.append(data.documents[i])
     print('# documents: %d --> %d' % (len(data), len(new_docs)))

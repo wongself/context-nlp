@@ -132,99 +132,99 @@ if __name__ == '__main__':
     parser.add_argument('--gpu_id',
                         type=int,
                         default=-1,
-                        help="index of GPU to run the model")
+                        help='index of GPU to run the model')
     parser.add_argument('--data_dir',
                         type=str,
                         default=None,
                         required=True,
-                        help="path to the preprocessed dataset")
+                        help='path to the preprocessed dataset')
     parser.add_argument('--output_dir',
                         type=str,
                         default='entity_output',
-                        help="output directory of the entity model")
+                        help='output directory of the entity model')
 
     parser.add_argument(
         '--max_span_length',
         type=int,
         default=8,
         help=
-        "spans w/ length up to max_span_length are considered as candidates")
+        'spans w/ length up to max_span_length are considered as candidates')
     parser.add_argument('--train_batch_size',
                         type=int,
                         default=32,
-                        help="batch size during training")
+                        help='batch size during training')
     parser.add_argument('--eval_batch_size',
                         type=int,
                         default=32,
-                        help="batch size during inference")
+                        help='batch size during inference')
     parser.add_argument('--learning_rate',
                         type=float,
                         default=1e-5,
-                        help="learning rate for the BERT encoder")
+                        help='learning rate for the BERT encoder')
     parser.add_argument(
         '--task_learning_rate',
         type=float,
         default=1e-4,
         help=
-        "learning rate for task-specific parameters, i.e., classification head"
+        'learning rate for task-specific parameters, i.e., classification head'
     )
     parser.add_argument(
         '--warmup_proportion',
         type=float,
         default=0.1,
-        help="the ratio of the warmup steps to the total steps")
+        help='the ratio of the warmup steps to the total steps')
     parser.add_argument('--num_epoch',
                         type=int,
                         default=100,
-                        help="number of the training epochs")
+                        help='number of the training epochs')
     parser.add_argument(
         '--print_loss_step',
         type=int,
         default=200,
-        help="how often logging the loss value during training")
+        help='how often logging the loss value during training')
     parser.add_argument(
         '--eval_per_epoch',
         type=int,
         default=1,
-        help="how often evaluating the trained model on dev set during training"
+        help='how often evaluating the trained model on dev set during training'
     )
 
     parser.add_argument('--do_train',
                         action='store_true',
-                        help="whether to run training")
+                        help='whether to run training')
     parser.add_argument('--train_shuffle',
                         action='store_true',
-                        help="whether to train with randomly shuffled data")
+                        help='whether to train with randomly shuffled data')
     parser.add_argument('--do_eval',
                         action='store_true',
-                        help="whether to run evaluation")
+                        help='whether to run evaluation')
     parser.add_argument('--eval_test',
                         action='store_true',
-                        help="whether to evaluate on test set")
+                        help='whether to evaluate on test set')
     parser.add_argument('--save_pred',
                         action='store_true',
                         default=False,
-                        help="whether to save the predictions")
+                        help='whether to save the predictions')
     parser.add_argument('--dev_pred_filename',
                         type=str,
-                        default="ent_pred_dev.json",
-                        help="the prediction filename for the dev set")
+                        default='ent_pred_dev.json',
+                        help='the prediction filename for the dev set')
     parser.add_argument('--test_pred_filename',
                         type=str,
-                        default="ent_pred_test.json",
-                        help="the prediction filename for the test set")
+                        default='ent_pred_test.json',
+                        help='the prediction filename for the test set')
 
     parser.add_argument('--use_albert',
                         action='store_true',
-                        help="whether to use ALBERT model")
+                        help='whether to use ALBERT model')
     parser.add_argument('--model',
                         type=str,
                         default='bert-base-uncased',
-                        help="the base model name (a huggingface model)")
+                        help='the base model name (a huggingface model)')
     parser.add_argument('--bert_model_dir',
                         type=str,
                         default=None,
-                        help="the base model directory")
+                        help='the base model directory')
 
     parser.add_argument('--seed', type=int, default=0)
 
@@ -232,7 +232,20 @@ if __name__ == '__main__':
                         type=int,
                         required=True,
                         default=None,
-                        help="the context window size W for the entity model")
+                        help='the context window size W for the entity model')
+    parser.add_argument(
+        '--context_mode',
+        type=str,
+        choices=['single', 'both', 'left', 'right', 'search', 'random'],
+        default='single',
+        help='the context window mode for the entity model')
+    parser.add_argument(
+        '--truncate_sent',
+        action='store_true',
+        default=False,
+        help=
+        'whether to truncate the sentence to meet the window limit if it is too long'
+    )
 
     args = parser.parse_args()
     args.train_data = os.path.join(args.data_dir, 'train.json')
@@ -263,7 +276,7 @@ if __name__ == '__main__':
     dev_data = Dataset(args.dev_data)
     dev_samples, dev_ner = convert_dataset_to_samples(
         dev_data,
-        args.max_span_length,
+        args,
         ner_label2id=ner_label2id,
         context_window=args.context_window)
     dev_batches = batchify(dev_samples, args.eval_batch_size)
@@ -272,7 +285,7 @@ if __name__ == '__main__':
         train_data = Dataset(args.train_data)
         train_samples, train_ner = convert_dataset_to_samples(
             train_data,
-            args.max_span_length,
+            args,
             ner_label2id=ner_label2id,
             context_window=args.context_window)
         train_batches = batchify(train_samples, args.train_batch_size)
@@ -339,7 +352,7 @@ if __name__ == '__main__':
                                            args.dev_pred_filename)
         test_samples, test_ner = convert_dataset_to_samples(
             test_data,
-            args.max_span_length,
+            args,
             ner_label2id=ner_label2id,
             context_window=args.context_window)
         test_batches = batchify(test_samples, args.eval_batch_size)
