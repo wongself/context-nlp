@@ -3,25 +3,19 @@ import argparse
 import os
 import sys
 import random
-import logging
 import time
 from tqdm import tqdm
 from datetime import datetime
+from loguru import logger
 
 from shared.data_structures import Dataset
-from shared.const import task_ner_labels, get_labelmap
+from shared.const import task_ner_labels, get_label_map
 from entity.utils import convert_dataset_to_samples, batchify, NpEncoder
 from entity.models import EntityModel
 
 from transformers import get_linear_schedule_with_warmup
 import torch
 from torch.optim import AdamW
-
-logging.basicConfig(
-    format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-    datefmt='%m/%d/%Y %H:%M:%S',
-    level=logging.INFO)
-logger = logging.getLogger('root')
 
 
 def save_model(model, args):
@@ -40,7 +34,7 @@ def output_ner_predictions(model, batches, dataset, output_file):
     Save the prediction as a json file
     """
     ner_result = {}
-    span_hidden_table = {}
+    # span_hidden_table = {}
     tot_pred_ett = 0
     for i in range(len(batches)):
         output_dict = model.run_batch(batches[i], training=False)
@@ -118,7 +112,7 @@ def evaluate(model, batches, tot_gold):
     return f1
 
 
-def setseed(seed):
+def set_seed(seed):
     random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -186,7 +180,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--print_loss_step',
         type=int,
-        default=100,
+        default=200,
         help="how often logging the loss value during training")
     parser.add_argument(
         '--eval_per_epoch',
@@ -249,26 +243,19 @@ if __name__ == '__main__':
         logger.info('Use Albert: %s' % args.model)
         args.use_albert = True
 
-    setseed(args.seed)
+    set_seed(args.seed)
 
     timestamp = datetime.now().strftime('%Y%m%d-%H%M%S-%f')
     args.output_dir = f'{args.output_dir}/{timestamp}'
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-    if args.do_train:
-        logger.addHandler(
-            logging.FileHandler(os.path.join(args.output_dir, "train.log"),
-                                'w'))
-    else:
-        logger.addHandler(
-            logging.FileHandler(os.path.join(args.output_dir, "eval.log"),
-                                'w'))
-
+    logger.add(f"{args.output_dir}/{'train' if args.do_train else 'eval'}.log",
+               rotation="5 MB")
     logger.info(sys.argv)
     logger.info(args)
 
-    ner_label2id, ner_id2label = get_labelmap(task_ner_labels[args.task])
+    ner_label2id, ner_id2label = get_label_map(task_ner_labels[args.task])
 
     num_ner_labels = len(task_ner_labels[args.task]) + 1
     model = EntityModel(args, num_ner_labels=num_ner_labels)

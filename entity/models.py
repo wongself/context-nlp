@@ -11,9 +11,7 @@ from transformers import AlbertTokenizer, AlbertPreTrainedModel, AlbertModel
 
 import subprocess
 import numpy
-import logging
-
-logger = logging.getLogger('root')
+from loguru import logger
 
 
 def auto_device(min_memory: int = 8192):
@@ -420,8 +418,7 @@ class EntityModel():
                     spans=bert_spans_tensor.to(self._device),
                     spans_mask=spans_mask_tensor.to(self._device),
                     spans_ner_label=None,
-                    attention_mask=attention_mask_tensor.to(
-                        self._device),
+                    attention_mask=attention_mask_tensor.to(self._device),
                 )
             _, predicted_label = ner_logits.max(2)
             predicted_label = predicted_label.cpu().numpy()

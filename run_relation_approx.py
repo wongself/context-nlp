@@ -358,7 +358,7 @@ def print_pred_json(eval_data, eval_features, preds, id2label, output_file):
     with open(output_file, 'w') as f:
         f.write('\n'.join(json.dumps(doc) for doc in js))
 
-def setseed(seed):
+def set_seed(seed):
     random.seed(seed)
     np.random.seed(args.seed)
     torch.manual_seed(seed)
@@ -387,7 +387,7 @@ def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
     n_gpu = torch.cuda.device_count()
 
-    setseed(args.seed)
+    set_seed(args.seed)
 
     if not args.do_train and not args.do_eval:
         raise ValueError("At least one of `do_train` or `do_eval` must be True.")
