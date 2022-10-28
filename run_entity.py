@@ -6,15 +6,16 @@ import random
 import logging
 import time
 from tqdm import tqdm
-import numpy as np
+from datetime import datetime
 
 from shared.data_structures import Dataset
 from shared.const import task_ner_labels, get_labelmap
 from entity.utils import convert_dataset_to_samples, batchify, NpEncoder
 from entity.models import EntityModel
 
-from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import get_linear_schedule_with_warmup
 import torch
+from torch.optim import AdamW
 
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
@@ -125,14 +126,19 @@ def setseed(seed):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        fromfile_prefix_chars='@')
 
     parser.add_argument('--task',
                         type=str,
                         default=None,
                         required=True,
                         choices=['ace04', 'ace05', 'scierc'])
-
+    parser.add_argument('--gpu_id',
+                        type=int,
+                        default=-1,
+                        help="index of GPU to run the model")
     parser.add_argument('--data_dir',
                         type=str,
                         default=None,
@@ -188,9 +194,6 @@ if __name__ == '__main__':
         default=1,
         help="how often evaluating the trained model on dev set during training"
     )
-    parser.add_argument("--bertadam",
-                        action="store_true",
-                        help="If bertadam, then set correct_bias = False")
 
     parser.add_argument('--do_train',
                         action='store_true',
@@ -204,6 +207,10 @@ if __name__ == '__main__':
     parser.add_argument('--eval_test',
                         action='store_true',
                         help="whether to evaluate on test set")
+    parser.add_argument('--save_pred',
+                        action='store_true',
+                        default=False,
+                        help="whether to save the predictions")
     parser.add_argument('--dev_pred_filename',
                         type=str,
                         default="ent_pred_dev.json",
@@ -244,6 +251,8 @@ if __name__ == '__main__':
 
     setseed(args.seed)
 
+    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S-%f')
+    args.output_dir = f'{args.output_dir}/{timestamp}'
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
@@ -290,9 +299,7 @@ if __name__ == '__main__':
             'lr':
             args.task_learning_rate
         }]
-        optimizer = AdamW(optimizer_grouped_parameters,
-                          lr=args.learning_rate,
-                          correct_bias=not (args.bertadam))
+        optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate)
         t_total = len(train_batches) * args.num_epoch
         scheduler = get_linear_schedule_with_warmup(
             optimizer, int(t_total * args.warmup_proportion), t_total)
@@ -318,8 +325,9 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
 
                 if global_step % args.print_loss_step == 0:
-                    logger.info('Epoch=%d, iter=%d, loss=%.5f' %
-                                (_, i, tr_loss / tr_examples))
+                    logger.info(
+                        f'Epoch={_ + 1}, iter={i}, loss={tr_loss / tr_examples:.3f}'
+                    )
                     tr_loss = 0
                     tr_examples = 0
 
@@ -349,7 +357,8 @@ if __name__ == '__main__':
             context_window=args.context_window)
         test_batches = batchify(test_samples, args.eval_batch_size)
         evaluate(model, test_batches, test_ner)
-        output_ner_predictions(model,
-                               test_batches,
-                               test_data,
-                               output_file=prediction_file)
+        if args.save_pred:
+            output_ner_predictions(model,
+                                   test_batches,
+                                   test_data,
+                                   output_file=prediction_file)

@@ -4,19 +4,50 @@ import torch.nn.functional as F
 from torch.nn import CrossEntropyLoss
 
 from allennlp.nn.util import batched_index_select
-from allennlp.nn import util, Activation
 from allennlp.modules import FeedForward
-
-import numpy as np
 
 from transformers import BertTokenizer, BertPreTrainedModel, BertModel
 from transformers import AlbertTokenizer, AlbertPreTrainedModel, AlbertModel
 
-import os
-import json
+import subprocess
+import numpy
 import logging
 
 logger = logging.getLogger('root')
+
+
+def auto_device(min_memory: int = 8192):
+    logger.info("Automatically allocating device...")
+
+    if not torch.cuda.is_available():
+        logger.info("Cuda device is unavailable, device `cpu` returned")
+        return torch.device('cpu')
+
+    try:
+        COMMAND = "nvidia-smi --query-gpu=memory.free --format=csv"
+        free_memories = subprocess.check_output(
+            COMMAND.split()).decode().strip().split('\n')[1:]
+        free_memories = [int(x.split()[0]) for x in free_memories]
+        assert len(free_memories) == torch.cuda.device_count()
+    except Exception:
+        logger.warning(
+            "Cuda device information inquiry failed, device `cpu` returned")
+        return torch.device('cpu')
+    else:
+        selected_id = numpy.argmax(free_memories)
+        selected_mem = free_memories[selected_id]
+        if selected_mem < min_memory:
+            logger.warning(
+                f"Cuda device `cuda:{selected_id}` with maximum free memory {selected_mem} MiB "
+                f"fails to meet the requirement {min_memory} MiB, device `cpu` returned"
+            )
+            return torch.device('cpu')
+        else:
+            logger.info(
+                f"Cuda device `cuda:{selected_id}` with free memory {selected_mem} MiB "
+                f"successfully allocated, device `cuda:{selected_id}` returned"
+            )
+            return torch.device('cuda', selected_id)
 
 
 class BertForEntity(BertPreTrainedModel):
@@ -38,7 +69,7 @@ class BertForEntity(BertPreTrainedModel):
             FeedForward(input_dim=config.hidden_size * 2 + width_embedding_dim,
                         num_layers=2,
                         hidden_dims=head_hidden_dim,
-                        activations=F.relu,
+                        activations=nn.ReLU(),
                         dropout=0.2), nn.Linear(head_hidden_dim,
                                                 num_ner_labels))
 
@@ -52,7 +83,8 @@ class BertForEntity(BertPreTrainedModel):
         sequence_output, pooled_output = self.bert(
             input_ids=input_ids,
             token_type_ids=token_type_ids,
-            attention_mask=attention_mask)
+            attention_mask=attention_mask,
+            return_dict=False)
 
         sequence_output = self.hidden_dropout(sequence_output)
         """
@@ -134,7 +166,7 @@ class AlbertForEntity(AlbertPreTrainedModel):
             FeedForward(input_dim=config.hidden_size * 2 + width_embedding_dim,
                         num_layers=2,
                         hidden_dims=head_hidden_dim,
-                        activations=F.relu,
+                        activations=nn.ReLU(),
                         dropout=0.2), nn.Linear(head_hidden_dim,
                                                 num_ner_labels))
 
@@ -237,19 +269,14 @@ class EntityModel():
                 num_ner_labels=num_ner_labels,
                 max_span_length=args.max_span_length)
 
-        self._model_device = 'cpu'
-        self.move_model_to_cuda()
+        device = auto_device() if args.gpu_id < 0 else torch.device(
+            'cuda', args.gpu_id)
+        if device.type.startswith('cuda'):
+            torch.cuda.set_device(device)
+            temp = torch.randn(50).to(device)
 
-    def move_model_to_cuda(self):
-        if not torch.cuda.is_available():
-            logger.error('No CUDA found!')
-            exit(-1)
-        logger.info('Moving to CUDA...')
-        self._model_device = 'cuda'
-        self.bert_model.cuda()
-        logger.info('# GPUs = %d' % (torch.cuda.device_count()))
-        if torch.cuda.device_count() > 1:
-            self.bert_model = torch.nn.DataParallel(self.bert_model)
+        self._device = device
+        self.bert_model.to(device)
 
     def _get_input_tensors(self, tokens, spans, spans_ner_label):
         start2idx = []
@@ -363,12 +390,6 @@ class EntityModel():
                     dim=0)
                 final_spans_mask_tensor = torch.cat(
                     (final_spans_mask_tensor, spans_mask_tensor), dim=0)
-        #logger.info(final_tokens_tensor)
-        #logger.info(final_attention_mask)
-        #logger.info(final_bert_spans_tensor)
-        #logger.info(final_bert_spans_tensor.shape)
-        #logger.info(final_spans_mask_tensor.shape)
-        #logger.info(final_spans_ner_label_tensor.shape)
         return final_tokens_tensor, final_attention_mask, final_bert_spans_tensor, final_spans_mask_tensor, final_spans_ner_label_tensor, sentence_length
 
     def run_batch(self, samples_list, try_cuda=True, training=True):
@@ -383,11 +404,11 @@ class EntityModel():
         if training:
             self.bert_model.train()
             ner_loss, ner_logits, spans_embedding = self.bert_model(
-                input_ids=tokens_tensor.to(self._model_device),
-                spans=bert_spans_tensor.to(self._model_device),
-                spans_mask=spans_mask_tensor.to(self._model_device),
-                spans_ner_label=spans_ner_label_tensor.to(self._model_device),
-                attention_mask=attention_mask_tensor.to(self._model_device),
+                input_ids=tokens_tensor.to(self._device),
+                spans=bert_spans_tensor.to(self._device),
+                spans_mask=spans_mask_tensor.to(self._device),
+                spans_ner_label=spans_ner_label_tensor.to(self._device),
+                attention_mask=attention_mask_tensor.to(self._device),
             )
             output_dict['ner_loss'] = ner_loss.sum()
             output_dict['ner_llh'] = F.log_softmax(ner_logits, dim=-1)
@@ -395,12 +416,12 @@ class EntityModel():
             self.bert_model.eval()
             with torch.no_grad():
                 ner_logits, spans_embedding, last_hidden = self.bert_model(
-                    input_ids=tokens_tensor.to(self._model_device),
-                    spans=bert_spans_tensor.to(self._model_device),
-                    spans_mask=spans_mask_tensor.to(self._model_device),
+                    input_ids=tokens_tensor.to(self._device),
+                    spans=bert_spans_tensor.to(self._device),
+                    spans_mask=spans_mask_tensor.to(self._device),
                     spans_ner_label=None,
                     attention_mask=attention_mask_tensor.to(
-                        self._model_device),
+                        self._device),
                 )
             _, predicted_label = ner_logits.max(2)
             predicted_label = predicted_label.cpu().numpy()
