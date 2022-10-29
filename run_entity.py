@@ -228,6 +228,10 @@ if __name__ == '__main__':
 
     parser.add_argument('--seed', type=int, default=0)
 
+    parser.add_argument('--neg_entity_count',
+                        type=int,
+                        default=100,
+                        help='the number of negative entity samples')
     parser.add_argument('--context_window',
                         type=int,
                         required=True,

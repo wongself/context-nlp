@@ -271,7 +271,7 @@ class EntityModel():
             'cuda', args.gpu_id)
         if device.type.startswith('cuda'):
             torch.cuda.set_device(device)
-            temp = torch.randn(50).to(device)
+            # temp = torch.randn(50).to(device)
 
         self._device = device
         self.bert_model.to(device)

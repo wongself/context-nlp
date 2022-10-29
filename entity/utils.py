@@ -6,7 +6,7 @@ import random
 
 def batchify(samples, batch_size):
     """
-    Batchfy samples with a batch size
+    Batchify samples with a batch size
     """
     num_samples = len(samples)
 
@@ -159,33 +159,44 @@ def convert_dataset_to_samples(dataset,
             sample['sent_end'] = sent_end
             sample['sent_start_in_doc'] = sent.sentence_start
 
-            sent_ner = {}
-            for ner in sent.ner:
-                sent_ner[ner.span.span_sent] = ner.label
-
-            span2id = {}
+            # create positive samples
+            pos_spans = []
             sample['spans'] = []
             sample['spans_label'] = []
+            for ner in sent.ner:
+                i, j = ner.span.start_sent, ner.span.end_sent
+                sample['spans'].append(
+                    (i + sent_start, j + sent_start, j - i + 1))
+                sample['spans_label'].append(ner_label2id[ner.label])
+                pos_spans.append(ner.span.span_sent)
+
+            # create negative samples
+            neg_sample_spans = []
             for i in range(sent_length):
                 for j in range(i, min(sent_length, i + args.max_span_length)):
-                    sample['spans'].append(
+                    if (i, j) in pos_spans:
+                        continue
+                    neg_sample_spans.append(
                         (i + sent_start, j + sent_start, j - i + 1))
-                    span2id[(i, j)] = len(sample['spans']) - 1
-                    if (i, j) not in sent_ner:
-                        sample['spans_label'].append(0)
-                    else:
-                        sample['spans_label'].append(
-                            ner_label2id[sent_ner[(i, j)]])
+
+            # combine pos/neg samples
+            neg_sample_spans = random.sample(
+                neg_sample_spans,
+                min(len(neg_sample_spans), args.neg_entity_count))
+            sample['spans'].extend(neg_sample_spans)
+            sample['spans_label'].extend(
+                [0 for _ in range(len(neg_sample_spans))])
+
             samples.append(sample)
     avg_length = sum([len(sample['tokens'])
                       for sample in samples]) / len(samples)
     max_length = max([len(sample['tokens']) for sample in samples])
-    logger.info('# Overlap: %d' % num_overlap)
+    logger.info('# Overlap: %d' % num_overlap)  # TODO
     logger.info(
-        'Extracted %d samples from %d documents, with %d NER labels, %.3f avg input length, %d max length'
-        % (len(samples), data_range[1] - data_range[0], num_ner, avg_length,
-           max_length))
-    logger.info('Max Length: %d, max NER: %d' % (max_len, max_ner))
+        f'Extracted {len(samples)} samples from {data_range[1] - data_range[0]} documents, '
+        f'with {num_ner} NER labels, {avg_length:.3f} avg input length, {max_length} max length'
+    )
+    logger.info(f'Max Length: {max_len}, max NER: {max_ner}')
     return samples, num_ner
 
 

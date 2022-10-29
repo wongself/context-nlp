@@ -3,7 +3,7 @@
 --do_eval
 --eval_test
 --max_span_length
-10
+12
 --num_epoch
 30
 --train_batch_size
@@ -18,6 +18,8 @@
 10111
 --context_window
 0
+--context_mode
+single
 --gpu_id
 7
 --task
