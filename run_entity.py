@@ -123,6 +123,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         fromfile_prefix_chars='@')
+    os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
     parser.add_argument('--task',
                         type=str,
@@ -214,9 +215,6 @@ if __name__ == '__main__':
                         default='ent_pred_test.json',
                         help='the prediction filename for the test set')
 
-    parser.add_argument('--use_albert',
-                        action='store_true',
-                        help='whether to use ALBERT model')
     parser.add_argument('--model',
                         type=str,
                         default='bert-base-uncased',
@@ -240,7 +238,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--context_mode',
         type=str,
-        choices=['single', 'both', 'left', 'right', 'search', 'random'],
+        choices=['single', 'both', 'left', 'right', 'cls', 'search', 'random'],
         default='single',
         help='the context window mode for the entity model')
     parser.add_argument(
@@ -255,10 +253,6 @@ if __name__ == '__main__':
     args.train_data = os.path.join(args.data_dir, 'train.json')
     args.dev_data = os.path.join(args.data_dir, 'dev.json')
     args.test_data = os.path.join(args.data_dir, 'test.json')
-
-    if 'albert' in args.model:
-        logger.info('Use Albert: %s' % args.model)
-        args.use_albert = True
 
     set_seed(args.seed)
 
@@ -312,11 +306,16 @@ if __name__ == '__main__':
         tr_examples = 0
         global_step = 0
         eval_step = len(train_batches) // args.eval_per_epoch
-        for _ in tqdm(range(args.num_epoch)):
+        for _ in range(args.num_epoch):
             if args.train_shuffle:
                 random.shuffle(train_batches)
-            for i in tqdm(range(len(train_batches))):
-                output_dict = model.run_batch(train_batches[i], training=True)
+            for i in tqdm(range(len(train_batches)),
+                          desc=f'Train epoch {_ + 1}'):
+                try:
+                    output_dict = model.run_batch(train_batches[i],
+                                                  training=True)
+                except Exception:
+                    print(train_batches[i])
                 loss = output_dict['ner_loss']
                 loss.backward()
 
@@ -330,7 +329,7 @@ if __name__ == '__main__':
 
                 if global_step % args.print_loss_step == 0:
                     logger.info(
-                        f'Epoch={_ + 1}, iter={i}, loss={tr_loss / tr_examples:.3f}'
+                        f'Epoch={_ + 1}, iter={i + 1}, loss={tr_loss / tr_examples:.3f}'
                     )
                     tr_loss = 0
                     tr_examples = 0

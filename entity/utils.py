@@ -187,6 +187,12 @@ def convert_dataset_to_samples(dataset,
             sample['spans_label'].extend(
                 [0 for _ in range(len(neg_sample_spans))])
 
+            spans_sample = list(zip(sample['spans'], sample['spans_label']))
+            random.shuffle(spans_sample)
+            s_spans, s_labels = zip(*spans_sample)
+            sample['spans'] = list(s_spans)
+            sample['spans_label'] = list(s_labels)
+
             samples.append(sample)
     avg_length = sum([len(sample['tokens'])
                       for sample in samples]) / len(samples)

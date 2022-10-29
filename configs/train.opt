@@ -7,7 +7,7 @@
 --num_epoch
 30
 --train_batch_size
-2
+4
 --eval_batch_size
 1
 --learning_rate
@@ -15,13 +15,13 @@
 --task_learning_rate
 5e-5
 --seed
-10111
+1006
 --context_window
-0
+200
 --context_mode
-single
+both
 --gpu_id
-7
+1
 --task
 scierc
 --bert_model_dir
@@ -29,4 +29,4 @@ assets/transformers/scibert_scivocab_uncased
 --data_dir
 data/scierc
 --output_dir
-cache/scierc-single
+cache/scierc-both
