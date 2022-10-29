@@ -129,7 +129,7 @@ if __name__ == '__main__':
                         type=str,
                         default=None,
                         required=True,
-                        choices=['ace04', 'ace05', 'scierc'])
+                        choices=['ace04', 'ace05', 'scierc', 'genia'])
     parser.add_argument('--gpu_id',
                         type=int,
                         default=-1,
@@ -311,11 +311,16 @@ if __name__ == '__main__':
                 random.shuffle(train_batches)
             for i in tqdm(range(len(train_batches)),
                           desc=f'Train epoch {_ + 1}'):
-                try:
-                    output_dict = model.run_batch(train_batches[i],
-                                                  training=True)
-                except Exception:
-                    print(train_batches[i])
+                # try:
+                #     output_dict = model.run_batch(train_batches[i],
+                #                                   training=True)
+                # except Exception as e:
+                #     print(train_batches[i])
+                #     print(e)
+                # loss = output_dict['ner_loss']
+                # loss.backward()
+
+                output_dict = model.run_batch(train_batches[i], training=True)
                 loss = output_dict['ner_loss']
                 loss.backward()
 

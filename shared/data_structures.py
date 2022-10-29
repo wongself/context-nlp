@@ -72,9 +72,10 @@ class Document:
 
     def __init__(self, js):
         self._doc_key = js["doc_key"]
-        entries = fields_to_batches(
-            js,
-            ["doc_key", "clusters", "predicted_clusters", "section_starts"])
+        entries = fields_to_batches(js, [
+            "doc_key", "dataset", "clusters", "predicted_clusters",
+            "section_starts"
+        ])
         sentence_lengths = [len(entry["sentences"]) for entry in entries]
         sentence_starts = np.cumsum(sentence_lengths)
         sentence_starts = np.roll(sentence_starts, 1)
@@ -400,7 +401,7 @@ class Cluster:
             span = Span(entry[0], entry[1], sentence.text,
                         sentence.sentence_start)
             ners = [x for x in sentence.ner if x.span == span]
-            assert len(ners) <= 1
+            # assert len(ners) <= 1  # TODO
             ner = ners[0] if len(ners) == 1 else None
             to_append = ClusterMember(span, ner, sentence, cluster_id)
             members.append(to_append)

@@ -3,6 +3,7 @@ task_ner_labels = {
     'ace05': ['FAC', 'WEA', 'LOC', 'VEH', 'GPE', 'ORG', 'PER'],
     'scierc':
     ['Method', 'OtherScientificTerm', 'Task', 'Generic', 'Material', 'Metric'],
+    'genia': ['DNA', 'RNA', 'protein', 'cell_line', 'cell_type'],
 }
 
 task_rel_labels = {
