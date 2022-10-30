@@ -5,6 +5,7 @@ import json
 import copy
 from collections import Counter
 import numpy as np
+from loguru import logger
 
 
 def fields_to_batches(d, keys_to_ignore=[]):
@@ -401,7 +402,9 @@ class Cluster:
             span = Span(entry[0], entry[1], sentence.text,
                         sentence.sentence_start)
             ners = [x for x in sentence.ner if x.span == span]
-            # assert len(ners) <= 1  # TODO
+            if len(ners) > 1:
+                logger.warning(f'Conflict Spans: {" ".join(ners)}')
+            # assert len(ners) <= 1
             ner = ners[0] if len(ners) == 1 else None
             to_append = ClusterMember(span, ner, sentence, cluster_id)
             members.append(to_append)

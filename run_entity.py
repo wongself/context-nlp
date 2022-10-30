@@ -219,7 +219,7 @@ if __name__ == '__main__':
                         type=str,
                         default='bert-base-uncased',
                         help='the base model name (a huggingface model)')
-    parser.add_argument('--bert_model_dir',
+    parser.add_argument('--model_dir',
                         type=str,
                         default=None,
                         help='the base model directory')
@@ -348,7 +348,7 @@ if __name__ == '__main__':
                         save_model(model, args)
 
     if args.do_eval:
-        args.bert_model_dir = args.output_dir
+        args.model_dir = args.output_dir
         model = EntityModel(args, num_ner_labels=num_ner_labels)
         if args.eval_test:
             test_data = Dataset(args.test_data)

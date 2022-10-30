@@ -24,7 +24,7 @@ both
 1
 --task
 scierc
---bert_model_dir
+--model_dir
 assets/transformers/scibert_scivocab_uncased
 --data_dir
 data/scierc
