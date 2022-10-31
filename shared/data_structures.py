@@ -403,7 +403,7 @@ class Cluster:
                         sentence.sentence_start)
             ners = [x for x in sentence.ner if x.span == span]
             if len(ners) > 1:
-                logger.warning(f'Conflict Spans: {" ".join(ners)}')
+                logger.warning(f'Conflict Spans: {ners}')
             # assert len(ners) <= 1
             ner = ners[0] if len(ners) == 1 else None
             to_append = ClusterMember(span, ner, sentence, cluster_id)

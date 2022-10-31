@@ -242,6 +242,7 @@ class EntityModel():
         super().__init__()
 
         model_path = args.model_dir
+        logger.info(f'Load model from {model_path}')
 
         if model_path.lower().find('scideberta') >= 0:
             self.tokenizer = AutoTokenizer.from_pretrained(model_path)
