@@ -125,11 +125,12 @@ if __name__ == '__main__':
         fromfile_prefix_chars='@')
     os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
-    parser.add_argument('--task',
-                        type=str,
-                        default=None,
-                        required=True,
-                        choices=['ace04', 'ace05', 'scierc', 'genia'])
+    parser.add_argument(
+        '--task',
+        type=str,
+        default=None,
+        required=True,
+        choices=['ace04', 'ace05', 'conll03', 'scierc', 'genia'])
     parser.add_argument('--gpu_id',
                         type=int,
                         default=-1,
@@ -247,6 +248,13 @@ if __name__ == '__main__':
         default=False,
         help=
         'whether to truncate the sentence to meet the window limit if it is too long'
+    )
+    parser.add_argument(
+        '--cls_token',
+        action='store_true',
+        default=False,
+        help=
+        'whether to add the classifier token to the end of span representation'
     )
 
     args = parser.parse_args()
