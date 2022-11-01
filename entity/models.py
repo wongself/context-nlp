@@ -7,7 +7,7 @@ from allennlp.nn.util import batched_index_select
 from allennlp.modules import FeedForward
 
 from transformers import BertTokenizer, BertPreTrainedModel, BertModel
-from transformers import AutoTokenizer, DebertaPreTrainedModel, AutoModel
+from transformers import AlbertTokenizer, AlbertPreTrainedModel, AlbertModel
 from transformers import RobertaTokenizer, RobertaPreTrainedModel, RobertaModel
 
 import subprocess
@@ -237,7 +237,7 @@ class DeBertaForEntity(RobertaPreTrainedModel):
             return logits, spans_embedding, spans_embedding
 
 
-class SciDeBERTaForEntity(DebertaPreTrainedModel):
+class AlbertForEntity(AlbertPreTrainedModel):
 
     def __init__(self,
                  config,
@@ -246,7 +246,7 @@ class SciDeBERTaForEntity(DebertaPreTrainedModel):
                  width_embedding_dim=25):
         super().__init__(config)
 
-        self.bert = AutoModel.from_config(config)
+        self.albert = AlbertModel(config)
         self.hidden_dropout = nn.Dropout(config.hidden_dropout_prob)
         self.width_embedding = nn.Embedding(50, width_embedding_dim)
 
@@ -265,12 +265,12 @@ class SciDeBERTaForEntity(DebertaPreTrainedModel):
                              spans,
                              token_type_ids=None,
                              attention_mask=None):
-        sequence_output = self.bert(input_ids=input_ids,
-                                    token_type_ids=token_type_ids,
-                                    attention_mask=attention_mask)
+        sequence_output, _ = self.albert(input_ids=input_ids,
+                                         token_type_ids=token_type_ids,
+                                         attention_mask=attention_mask,
+                                         return_dict=False)
 
-        sequence_output = self.hidden_dropout(
-            sequence_output.last_hidden_state)
+        sequence_output = self.hidden_dropout(sequence_output)
         """
         spans: [batch_size, num_spans, 3]; 0: left_ned, 1: right_end, 2: width
         spans_mask: (batch_size, num_spans, )
@@ -284,7 +284,6 @@ class SciDeBERTaForEntity(DebertaPreTrainedModel):
         spans_width = spans[:, :, 2].view(spans.size(0), -1)
         spans_width_embedding = self.width_embedding(spans_width)
 
-        # Concatenate embeddings of left/right points and the width embedding
         spans_embedding = torch.cat(
             (spans_start_embedding, spans_end_embedding,
              spans_width_embedding),
@@ -339,10 +338,10 @@ class EntityModel():
         model_path = args.model_dir
         logger.info(f'Load model from {model_path}')
 
-        if model_path.lower().find('scideberta') >= 0:
-            logger.info('Loading SciDeBerta...')
-            self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-            self.bert_model = SciDeBERTaForEntity.from_pretrained(
+        if model_path.lower().find('albert') >= 0:
+            logger.info('Loading AlBert...')
+            self.tokenizer = AlbertTokenizer.from_pretrained(model_path)
+            self.bert_model = AlbertForEntity.from_pretrained(
                 model_path, num_ner_labels=num_ner_labels)
         elif model_path.lower().find('roberta') >= 0:
             logger.info('Loading RoBerta...')

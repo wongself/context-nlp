@@ -44,9 +44,9 @@ def output_ner_predictions(model, batches, dataset, output_file):
             k = sample['doc_key'] + '-' + str(sample['sentence_ix'])
             ner_result[k] = []
             for span, pred in zip(sample['spans'], preds):
-                span_id = '%s::%d::(%d,%d)' % (sample['doc_key'],
-                                               sample['sentence_ix'],
-                                               span[0] + off, span[1] + off)
+                # span_id = '%s::%d::(%d,%d)' % (sample['doc_key'],
+                #                                sample['sentence_ix'],
+                #                                span[0] + off, span[1] + off)
                 if pred == 0:
                     continue
                 ner_result[k].append(
@@ -323,15 +323,6 @@ if __name__ == '__main__':
                 random.shuffle(train_batches)
             for i in tqdm(range(len(train_batches)),
                           desc=f'Train epoch {_ + 1}'):
-                # try:
-                #     output_dict = model.run_batch(train_batches[i],
-                #                                   training=True)
-                # except Exception as e:
-                #     print(train_batches[i])
-                #     print(e)
-                # loss = output_dict['ner_loss']
-                # loss.backward()
-
                 output_dict = model.run_batch(train_batches[i], training=True)
                 loss = output_dict['ner_loss']
                 loss.backward()
