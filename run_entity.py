@@ -155,10 +155,14 @@ if __name__ == '__main__':
                         type=int,
                         default=32,
                         help='batch size during training')
+    parser.add_argument('--dev_batch_size',
+                        type=int,
+                        default=1,
+                        help='batch size during inference')
     parser.add_argument('--eval_batch_size',
                         type=int,
-                        default=32,
-                        help='batch size during inference')
+                        default=1,
+                        help='batch size during evaluation')
     parser.add_argument('--learning_rate',
                         type=float,
                         default=1e-5,
@@ -285,7 +289,7 @@ if __name__ == '__main__':
         args,
         ner_label2id=ner_label2id,
         context_window=args.context_window)
-    dev_batches = batchify(dev_samples, args.eval_batch_size)
+    dev_batches = batchify(dev_samples, args.dev_batch_size)
 
     if args.do_train:
         train_data = Dataset(args.train_data)
