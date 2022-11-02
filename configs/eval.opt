@@ -1,0 +1,14 @@
+--do_eval
+--eval_test
+--max_span_length
+12
+--gpu_id
+1
+--task
+scierc
+--model_dir
+assets/transformers/scibert_scivocab_uncased
+--data_dir
+data/scierc
+--output_dir
+eval/scierc-both

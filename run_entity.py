@@ -10,7 +10,7 @@ from loguru import logger
 
 from shared.data_structures import Dataset
 from shared.const import task_ner_labels, get_label_map
-from entity.utils import convert_dataset_to_samples, batchify, NpEncoder
+from entity.utils import create_train_samples, create_eval_samples, batchify, NpEncoder
 from entity.models import EntityModel
 
 from transformers import get_linear_schedule_with_warmup
@@ -238,7 +238,7 @@ if __name__ == '__main__':
     parser.add_argument('--context_window',
                         type=int,
                         required=True,
-                        default=None,
+                        default=0,
                         help='the context window size W for the entity model')
     parser.add_argument(
         '--context_mode',
@@ -284,20 +284,13 @@ if __name__ == '__main__':
     model = EntityModel(args, num_ner_labels=num_ner_labels)
 
     dev_data = Dataset(args.dev_data)
-    dev_samples, dev_ner = convert_dataset_to_samples(
-        dev_data,
-        args,
-        ner_label2id=ner_label2id,
-        context_window=args.context_window)
+    dev_samples, dev_ner = create_train_samples(dev_data, args, ner_label2id)
     dev_batches = batchify(dev_samples, args.dev_batch_size)
 
     if args.do_train:
         train_data = Dataset(args.train_data)
-        train_samples, train_ner = convert_dataset_to_samples(
-            train_data,
-            args,
-            ner_label2id=ner_label2id,
-            context_window=args.context_window)
+        train_samples, train_ner = create_train_samples(
+            train_data, args, ner_label2id)
         train_batches = batchify(train_samples, args.train_batch_size)
         best_result = 0.0
 
@@ -361,11 +354,10 @@ if __name__ == '__main__':
             test_data = Dataset(args.dev_data)
             prediction_file = os.path.join(args.output_dir,
                                            args.dev_pred_filename)
-        test_samples, test_ner = convert_dataset_to_samples(
+        test_samples, test_ner = create_eval_samples(
             test_data,
-            args,
-            ner_label2id=ner_label2id,
-            context_window=args.context_window)
+            max_span_length=args.max_span_length,
+            ner_label2id=ner_label2id)
         test_batches = batchify(test_samples, args.eval_batch_size)
         evaluate(model, test_batches, test_ner)
         if args.save_pred:

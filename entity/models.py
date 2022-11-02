@@ -48,11 +48,23 @@ def auto_device(min_memory: int = 8192):
             return torch.device('cuda', selected_id)
 
 
+def get_special_token(h: torch.tensor, encodings: torch.tensor, token: int):
+    """
+    Get special token embedding (e.g. [CLS])
+    """
+    token_h = h.view(-1, h.shape[-1])
+    flat = encodings.contiguous().view(-1)
+
+    # get embedding of the given token
+    return token_h[flat == token, :]
+
+
 class BertForEntity(BertPreTrainedModel):
 
     def __init__(self,
                  config,
                  num_ner_labels,
+                 cls_token=None,
                  head_hidden_dim=150,
                  width_embedding_dim=25):
         super().__init__(config)
@@ -61,8 +73,11 @@ class BertForEntity(BertPreTrainedModel):
         self.hidden_dropout = nn.Dropout(config.hidden_dropout_prob)
         self.width_embedding = nn.Embedding(50, width_embedding_dim)
 
+        self.cls_token = cls_token
+        input_dim = width_embedding_dim + config.hidden_size * (
+            2 if not cls_token else 3)
         self.ner_classifier = nn.Sequential(
-            FeedForward(input_dim=config.hidden_size * 2 + width_embedding_dim,
+            FeedForward(input_dim=input_dim,
                         num_layers=2,
                         hidden_dims=head_hidden_dim,
                         activations=nn.ReLU(),
@@ -76,15 +91,17 @@ class BertForEntity(BertPreTrainedModel):
                              spans,
                              token_type_ids=None,
                              attention_mask=None):
-        sequence_output, _ = self.bert(input_ids=input_ids,
-                                       token_type_ids=token_type_ids,
-                                       attention_mask=attention_mask,
-                                       return_dict=False)
+        sequence_output = self.bert(
+            input_ids=input_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask)['last_hidden_state']
 
         sequence_output = self.hidden_dropout(sequence_output)
         """
-        spans: [batch_size, num_spans, 3]; 0: left_ned, 1: right_end, 2: width
-        spans_mask: (batch_size, num_spans, )
+        spans: [batch_size, num_spans, 3]; 0: left_bound, 1: right_bound, 2: width
+        spans_(start/end)_embedding: [batch_size, num_spans, hidden_size]
+        spans_width_embedding: [batch_size, num_spans, width_emb_dim]
+        spans_ctx: [batch_size, hidden_size]
         """
         spans_start = spans[:, :, 0].view(spans.size(0), -1)
         spans_start_embedding = batched_index_select(sequence_output,
@@ -95,13 +112,22 @@ class BertForEntity(BertPreTrainedModel):
         spans_width = spans[:, :, 2].view(spans.size(0), -1)
         spans_width_embedding = self.width_embedding(spans_width)
 
-        # Concatenate embeddings of left/right points and the width embedding
+        # concatenate embeddings of left/right points and the width embedding
         spans_embedding = torch.cat(
             (spans_start_embedding, spans_end_embedding,
              spans_width_embedding),
             dim=-1)
+
+        # concatenate current embeddings and the
+        if self.cls_token is not None:
+            spans_ctx = get_special_token(sequence_output, input_ids,
+                                          self.cls_token)
+            spans_ctx = spans_ctx.unsqueeze(1).repeat(1,
+                                                      spans_embedding.shape[1],
+                                                      1)
+            spans_embedding = torch.cat((spans_embedding, spans_ctx), dim=-1)
         """
-        spans_embedding: (batch_size, num_spans, hidden_size*2+embedding_dim)
+        spans_embedding: [batch_size, num_spans, hidden_size*(2 or 3) + width_emb_dim]
         """
         return spans_embedding
 
